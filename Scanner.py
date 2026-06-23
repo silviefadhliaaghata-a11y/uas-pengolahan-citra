@@ -47,6 +47,7 @@ LANG_OPTIONS = {
 current_image = None
 processed_image = None
 original_processed = None
+adjustment_base = None
 pages = []
 
 manual_crop_mode = False
@@ -246,13 +247,20 @@ def show_original(img):
     reset_manual_points()
 
 
-def show_result(img):
-    global processed_image, original_processed
+def show_result(img, update_base=True):
+    global processed_image, original_processed, adjustment_base
 
     processed_image = img.copy()
 
     if original_processed is None:
         original_processed = img.copy()
+
+    if update_base:
+        adjustment_base = img.copy()
+        brightness_slider.set(0)
+        brightness_value_label.configure(text="0")
+        contrast_slider.set(1)
+        contrast_value_label.configure(text="1.0")
 
     if len(img.shape) == 2:
         display = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
@@ -273,7 +281,7 @@ def show_result(img):
 
 
 def open_image_from_path(path):
-    global current_image, original_processed
+    global current_image, original_processed, adjustment_base
 
     image = cv2.imread(path)
 
@@ -283,6 +291,7 @@ def open_image_from_path(path):
 
     current_image = image
     original_processed = None
+    adjustment_base = None
 
     show_original(current_image)
     set_status(f"Gambar berhasil dimuat: {os.path.basename(path)}", SUCCESS_COLOR)
@@ -325,6 +334,13 @@ def handle_drop(event):
 # =====================================
 
 
+def start_new_scan_result(img):
+    global original_processed
+
+    original_processed = None
+    show_result(img)
+
+
 def auto_scan():
     global current_image
 
@@ -357,7 +373,7 @@ def auto_scan():
 
     warped = four_point_transform(image, pts)
 
-    show_result(warped)
+    start_new_scan_result(warped)
     enhanced = auto_enhance_document(warped)
     show_result(enhanced)
 
@@ -456,7 +472,7 @@ def apply_manual_crop():
     btn_manual_mode.configure(fg_color=manual_mode_default_color, text="🖱️ Mode Crop Manual")
     show_original(current_image)
 
-    show_result(warped)
+    start_new_scan_result(warped)
     set_status(
         "Dokumen berhasil dicrop manual. Pilih filter (Gray/B-W/dll) untuk mempertegas.",
         SUCCESS_COLOR,
@@ -498,11 +514,6 @@ def reset_image():
     if original_processed is None:
         return
 
-    brightness_slider.set(0)
-    brightness_value_label.configure(text="0")
-    contrast_slider.set(1)
-    contrast_value_label.configure(text="1.0")
-
     show_result(original_processed)
     set_status("Gambar direset", INFO_COLOR)
 
@@ -510,15 +521,15 @@ def reset_image():
 def apply_brightness_contrast():
     global processed_image
 
-    if original_processed is None:
+    if adjustment_base is None:
         return
 
     alpha = float(contrast_slider.get())
     beta = int(float(brightness_slider.get()))
 
-    adjusted = cv2.convertScaleAbs(original_processed, alpha=alpha, beta=beta)
+    adjusted = cv2.convertScaleAbs(adjustment_base, alpha=alpha, beta=beta)
     processed_image = adjusted
-    show_result(adjusted)
+    show_result(adjusted, update_base=False)
 
 
 def adjust_brightness(value):
